@@ -11,6 +11,8 @@ env:
   NEXUS_HELM_REPO_PASSWORD: ${{ secrets.NEXUS_HELM_REPO_PASSWORD }}
   SAUSAGE_STORE_NAMESPACE: ${{ secrets.NAMESPACE }}
   KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+  HELM_CHART_NAME: sausage-store
+  HELM_CHART_VERSION: 0.1.0
 
 jobs:
   build_and_push_to_docker_hub:
@@ -59,16 +61,21 @@ jobs:
       - name: Build Helm Dependencies
         run: helm dependency build ./sausage-store-chart
       - name: Package Helm chart
-        run: helm package ./sausage-store-chart --version 0.1.0
+        run: helm package ./sausage-store-chart --version "${HELM_CHART_VERSION}"
       - name: Add Nexus Helm Repository
         run: |
-          helm repo add nexus ${{ env.NEXUS_HELM_REPO }} \
-            --username ${{ env.NEXUS_HELM_REPO_USER }} \
-            --password ${{ env.NEXUS_HELM_REPO_PASSWORD }}
+          helm repo add nexus "${NEXUS_HELM_REPO}" \
+            --username "${NEXUS_HELM_REPO_USER}" \
+            --password "${NEXUS_HELM_REPO_PASSWORD}"
           helm repo update
       - name: Push Chart
         run: |
-          curl -u ${{ env.NEXUS_HELM_REPO_USER }}:${{ env.NEXUS_HELM_REPO_PASSWORD }} --upload-file sausage-store-0.1.0.tgz ${{ env.NEXUS_HELM_REPO }}
+          chart_package="${HELM_CHART_NAME}-${HELM_CHART_VERSION}.tgz"
+          repo_url="${NEXUS_HELM_REPO%/}/"
+          curl --fail --show-error --location \
+            -u "${NEXUS_HELM_REPO_USER}:${NEXUS_HELM_REPO_PASSWORD}" \
+            --upload-file "${chart_package}" \
+            "${repo_url}"
 
   deploy_helm_chart_to_kubernetes:
     name: Deploy Helm Chart To Kubernetes
@@ -83,14 +90,29 @@ jobs:
         run: echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > kubeconfig
       - name: Add Nexus Helm Repository
         run: |
-          helm repo add nexus ${{ env.NEXUS_HELM_REPO }} \
-            --username ${{ env.NEXUS_HELM_REPO_USER }} \
-            --password ${{ env.NEXUS_HELM_REPO_PASSWORD }}
+          helm repo add nexus "${NEXUS_HELM_REPO}" \
+            --username "${NEXUS_HELM_REPO_USER}" \
+            --password "${NEXUS_HELM_REPO_PASSWORD}"
       - name: Deploy with Helm
         run: |
-          helm repo update
+          for attempt in {1..6}; do
+            helm repo update
+            if helm search repo "nexus/${HELM_CHART_NAME}" --version "${HELM_CHART_VERSION}" | grep -q "nexus/${HELM_CHART_NAME}"; then
+              break
+            fi
+
+            if [ "${attempt}" -eq 6 ]; then
+              echo "Chart nexus/${HELM_CHART_NAME} version ${HELM_CHART_VERSION} was not found in the Nexus Helm index."
+              helm search repo nexus --versions || true
+              exit 1
+            fi
+
+            sleep 10
+          done
+
           envsubst < ./sausage-store-chart/values.yaml > ./values-resolved.yaml
-          helm upgrade --install sausage-store nexus/sausage-store \
-            --namespace ${{ env.SAUSAGE_STORE_NAMESPACE }} \
+          helm upgrade --install sausage-store "nexus/${HELM_CHART_NAME}" \
+            --version "${HELM_CHART_VERSION}" \
+            --namespace "${SAUSAGE_STORE_NAMESPACE}" \
             --values ./values-resolved.yaml \
             --kubeconfig ./kubeconfig
