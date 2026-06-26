@@ -1,9 +1,14 @@
 global:
   imagePullPolicy: Always
-  ###vault:
-  ###  host: ip
-  ###  name: vault
-  ###  vaultToken: someToken
+  vault:
+    host: ""
+    name: vault-token
+  mongodb:
+    containerPort: 27017
+    reports:
+      database: sausage-store
+      user: reports
+      password: reportspassword
 
 frontend:
   replicas: 1
