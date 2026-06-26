@@ -71,7 +71,20 @@ backend-report:
 
 infra:
   postgresql:
-  ### Опишите необходимые переменные для развертывания PostgresQL в кластере Kubernetes
+    image: postgres:13
+    env:
+      POSTGRES_DB: sausage-store
+      POSTGRES_USER: store
+      POSTGRES_PASSWORD: storepassword
+    containerPort: 5432
+    storage: 2Gi
+    resources:
+      requests:
+        cpu: "150m"
+        memory: "128Mi"
+      limits:
+        cpu: "500m"
+        memory: "512Mi"
   mongodb:
     env:
       MONGO_INITDB_ROOT_USERNAME: root
