@@ -7,8 +7,8 @@ global:
     containerPort: 27017
     reports:
       database: sausage-store
-      user: reports
-      password: reportspassword
+      user: root
+      password: rootpassword
 
 frontend:
   replicas: 1
@@ -48,10 +48,7 @@ backend:
   revisionHistoryLimit: 15
   replicas: 1
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: 25%
-      maxUnavailable: 25%
+    type: Recreate
   image: timnekk/sausage-backend:latest
   imagePullPolicy: Always
   resources:
@@ -60,7 +57,7 @@ backend:
       cpu: "100m"
     limits:
       memory: "512Mi"
-      cpu: "1"
+      cpu: "500m"
   containerPort: 8080
   livenessProbe:
     httpGet:
@@ -116,10 +113,10 @@ infra:
     storage: 2Gi
     resources:
       requests:
-        cpu: "150m"
+        cpu: "100m"
         memory: "128Mi"
       limits:
-        cpu: "500m"
+        cpu: "250m"
         memory: "512Mi"
   mongodb:
     image: mongo:7.0
